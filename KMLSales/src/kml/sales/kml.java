@@ -1,0 +1,153 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package kml.sales;
+
+import Utilidades.GeneraXML;
+import Utilidades.Punto;
+import java.io.*;
+import java.sql.*;
+import java.util.Vector;
+
+/**
+ *
+ * @author Victor
+ */
+public class kml {
+
+    /**
+     * @param args the command line arguments
+     */
+    public static void main(String[] args) {
+        // TODO code application logic here
+        try { 
+	    PrintWriter escribir = new PrintWriter(new BufferedWriter(new FileWriter("testKML.kml")));
+		
+            escribir.println(GeneraXML.Inicio());
+            escribir.println(procesa());
+            escribir.println(GeneraXML.Fin());
+
+            escribir.close();
+	} catch (Exception e) { 
+	    System.out.println(e);
+	}
+    }
+    public static String procesa() {
+       String Salida="";
+       
+       try {
+           String db = "src/Demo.accdb";
+           String url = "jdbc:ucanaccess://" + db;
+
+           //Class.forName ("sun.jdbc.odbc.JdbcOdbcDriver");
+           Connection con = DriverManager.getConnection (url, "", "");
+
+           Statement select = con.createStatement();
+           // Se realiza la consulta a la tabla
+           ResultSet consulta = select.executeQuery("SELECT * FROM f_punto");
+           boolean seguir = consulta.next();
+           // por cada elemento de la tabla...
+           while (seguir) {
+               // ... se almacena en un objeto de tipo punto y ...
+               Punto p = new Punto(consulta.getDouble("Lat"),consulta.getDouble("Lon"),consulta.getDouble("Alt"));
+               //System.out.println(p);
+               // ... se llama al metodo addPunto, con sus 3 parametros.
+               Salida=Salida+GeneraXML.addPunto(consulta.getString("Nombre"),consulta.getString("Descr"),p);
+
+               seguir = consulta.next(); 
+           }
+           consulta.close();
+
+           // Se realiza la consulta a la tabla
+           consulta = select.executeQuery("SELECT * FROM f_ruta");
+           seguir = consulta.next();
+           // por cada elemento de la tabla...
+           while (seguir) {
+               int id=consulta.getInt("cve_ruta");
+               //Se genera una ruta, cada una con los elementos de f_linea, vinculados a esta ruta.
+               Salida=Salida+GeneraXML.addLinea(consulta.getString("Nombre"),consulta.getString("Descripcion"), Leer(con, "select * from f_linea where cve_ruta="+id));
+
+               seguir = consulta.next(); 
+           }
+           consulta.close();
+           
+
+           consulta = select.executeQuery("SELECT * FROM f_zona");
+           seguir = consulta.next();
+           while (seguir) {
+               int id=consulta.getInt("cve_area");
+               Salida=Salida+GeneraXML.addPoligono(consulta.getString("Nombre"),consulta.getString("Descripcion"), Leer(con, "select * from f_area where cve_area="+id));
+
+               seguir = consulta.next(); 
+           }
+           consulta.close();
+           
+           consulta = select.executeQuery("SELECT * FROM f_venta");
+           seguir = consulta.next();
+           while (seguir) {
+               double altitud = 0.0;
+               Vector vec = new Vector();
+               altitud = consulta.getDouble("Venta");
+               for(int a=0;a<4;a++)
+               {
+                   if(a==0)
+                   {
+                        Punto p = new Punto(consulta.getDouble("Lat")+.01,consulta.getDouble("Lon"),altitud);
+                        vec.add(p);
+                   }
+                   if(a==1)
+                   {
+                        Punto p = new Punto(consulta.getDouble("Lat"),consulta.getDouble("Lon")+.01,altitud);
+                        vec.add(p);
+                   }
+                   if(a==2)
+                   {
+                        Punto p = new Punto(consulta.getDouble("Lat"),consulta.getDouble("Lon")-.01,altitud);
+                        vec.add(p);
+                   }
+                   if(a==3)
+                   {
+                        Punto p = new Punto(consulta.getDouble("Lat")-.01,consulta.getDouble("Lon"),altitud);
+                        vec.add(p);
+                   }
+               }
+               Salida=Salida+GeneraXML.addPoligono(consulta.getString("Nombre"),consulta.getString("Desr"), vec);
+
+               seguir = consulta.next(); 
+           }
+           consulta.close();
+           
+           select.close();
+           con.close();
+
+         } catch (Exception ex) {
+             System.out.println(ex.toString());
+         }       
+       
+       return Salida;
+   }
+   
+   private static Vector Leer(Connection c, String SQL) {
+       Vector v = new Vector();
+ 
+       try {
+           Statement select2 = c.createStatement();
+           ResultSet consulta2 = select2.executeQuery(SQL);
+
+               boolean seguir = consulta2.next();
+               while (seguir) {
+                   Punto p = new Punto(consulta2.getDouble("Lat"),consulta2.getDouble("Lon"),consulta2.getDouble("Alt"));
+                   v.add(p);
+                   seguir = consulta2.next(); 
+               }
+               consulta2.close();
+       } catch (Exception e) {
+           System.out.println(SQL+"\n"+e);
+       }
+       
+       return v;
+   }
+    
+}
